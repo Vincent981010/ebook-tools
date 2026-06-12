@@ -2,466 +2,232 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPUB / TXT 字詞替換與轉換工具</title>
+    <title>EPUB 繁體轉換工具</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
     <style>
-        :root {
-            --primary-color: #4a90e2;
-            --danger-color: #e06c75;
-            --bg-color: #f5f7fa;
-            --card-bg: #ffffff;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: #333;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-        }
-        .container {
-            max-width: 700px;
-            width: 100%;
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        h2 {
+        body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
+        .container { max-width: 650px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        /* 拖曳專用落點區域 */
+        #dropZone {
+            border: 3px dashed #b4b4d8;
+            border-radius: 8px;
+            padding: 40px 20px;
             text-align: center;
-            color: #333;
-            margin-bottom: 25px;
-        }
-        .form-group {
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 1px dashed #e0e0e0;
-        }
-        .form-group:last-of-type {
-            border-bottom: none;
-        }
-        label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-        .mode-select {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        .mode-label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            font-weight: normal;
-        }
-        input[type="file"] {
-            width: 100%;
-            padding: 15px;
-            border: 2px dashed #ccc;
-            border-radius: 6px;
-            cursor: pointer;
-            box-sizing: border-box;
-            background: #fafafa;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            font-weight: bold;
-        }
-        .sub-settings {
-            margin-left: 24px;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-left: 4px solid var(--primary-color);
-            border-radius: 0 6px 6px 0;
-        }
-        select {
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-            width: 100%;
-            box-sizing: border-box;
-            background: white;
-        }
-        .rule-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-            align-items: center;
-        }
-        .rule-row input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        button {
-            padding: 10px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
-        }
-        .btn-add {
-            background-color: #e1ecf4;
-            color: #39739d;
-            border: 1px solid #7aa7c7;
-            width: 100%;
-            margin-top: 5px;
-        }
-        .btn-add:hover { background-color: #d0e3f0; }
-        .btn-delete {
-            background-color: var(--danger-color);
-            color: white;
-            padding: 8px 12px;
-        }
-        .btn-delete:hover { background-color: #d15963; }
-        .btn-submit {
-            background-color: var(--primary-color);
-            color: white;
-            width: 100%;
+            background: #f9f9ff;
+            color: #555;
             font-size: 16px;
-            padding: 12px;
-            margin-top: 15px;
-            border-radius: 6px;
-        }
-        .btn-submit:hover { background-color: #357abd; }
-        .btn-submit:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        #status {
-            margin-top: 15px;
-            padding: 12px;
-            border-radius: 4px;
-            text-align: center;
             font-weight: bold;
-            display: none;
-            white-space: pre-line;
-            line-height: 1.5;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 20px;
         }
-        .info { background-color: #e3f2fd; color: #0d47a1; }
-        .success { background-color: #e8f5e9; color: #1b5e20; }
-        .error { background-color: #ffebee; color: #c62828; }
+        #dropZone.dragover {
+            background: #e1e1ff;
+            border-color: #6666cc;
+            color: #222;
+        }
+        
+        .btn-group { display: flex; gap: 15px; margin-bottom: 20px; }
+        .btn-wrapper { flex: 1; text-align: center; }
+        .btn-wrapper label { display: block; background: #007bff; color: white; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; }
+        .btn-wrapper label:hover { background: #0056b3; }
+        .btn-wrapper input[type="file"] { display: none; }
+        .btn-wrapper .hint { font-size: 11px; color: #666; margin-top: 5px; display: block; }
+        
+        #log { background: #333; color: #0f0; padding: 12px; height: 380px; overflow-y: auto; font-family: monospace; font-size: 13px; line-height: 1.5; border-radius: 6px; }
     </style>
 </head>
 <body>
-
 <div class="container">
-    <h2>EPUB / TXT 字詞替換與轉換工具</h2>
+    <h3>EPUB 繁體轉換</h3>
     
-    <div class="form-group">
-        <label>1. 選擇處理模式與檔案</label>
-        <div class="mode-select">
-            <label class="mode-label">
-                <input type="radio" name="uploadMode" value="file" checked onchange="toggleMode()"> 單一檔案 (.txt / .epub)
-            </label>
-            <label class="mode-label">
-                <input type="radio" name="uploadMode" value="folder" onchange="toggleMode()"> 整個資料夾 (含子資料夾)
-            </label>
-        </div>
-        
-        <input type="file" id="fileInput" accept=".txt,.epub">
-        <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+    <div id="dropZone">
+        動態拖曳區：請將【多個 EPUB 檔案】或【整個書庫資料夾】拖曳到這裡
+        <div style="font-size: 12px; color: #888; font-weight: normal; margin-top: 8px;">(支援資料夾內含多層子資料夾的深度掃描)</div>
     </div>
-
-    <div class="form-group">
-        <label>2. 設定電子書處理功能</label>
-        
-        <div class="checkbox-group">
-            <input type="checkbox" id="enableOpenCC" checked onchange="toggleSections()">
-            <label for="enableOpenCC" style="margin: 0; cursor: pointer;">啟用 OpenCC 繁簡轉換</label>
+    
+    <div class="btn-group">
+        <div class="btn-wrapper">
+            <label for="fileInput">📄 點擊選擇多個檔案</label>
+            <input type="file" id="fileInput" accept=".epub" multiple>
+            <span class="hint">適合分散的獨立電子書</span>
         </div>
-        <div id="openccSection" class="sub-settings">
-            <select id="openccMode">
-                <option value="cn2twp">簡體 ➔ 臺灣正體（含常用詞彙修正，推薦）</option>
-                <option value="cn2tw">簡體 ➔ 臺灣正體（僅轉字）</option>
-                <option value="cn2t">簡體 ➔ 傳統繁體</option>
-                <option value="tw2cn">臺灣正體 ➔ 簡體（含常用詞彙修正）</option>
-                <option value="t2cn">繁體 ➔ 簡體</option>
-            </select>
-        </div>
-
-        <div class="checkbox-group">
-            <input type="checkbox" id="enableCustomRules" onchange="toggleSections()">
-            <label for="enableCustomRules" style="margin: 0; cursor: pointer;">啟用自訂字詞替換規則</label>
-        </div>
-        <div id="customRulesSection" class="sub-settings" style="display: none;">
-            <div id="rulesContainer">
-                <div class="rule-row">
-                    <input type="text" class="find-input" placeholder="要被換掉的字詞（例如：舊主角名）">
-                    <span>➔</span>
-                    <input type="text" class="replace-input" placeholder="換成新的字詞（例如：新主角名）">
-                    <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
-                </div>
-            </div>
-            <button type="button" class="btn-add" onclick="addRuleRow()">+ 增加一組規則</button>
+        <div class="btn-wrapper">
+            <label for="folderInput" style="background: #28a745;">📂 點擊選擇整個資料夾</label>
+            <input type="file" id="folderInput" webkitdirectory directory multiple>
+            <span class="hint">透過瀏覽器選單選擇單一目錄</span>
         </div>
     </div>
 
-    <button type="button" id="submitBtn" class="btn-submit" onclick="processAll()">執行處理並下載</button>
-    
-    <div id="status"></div>
+    <div id="log">系統準備就緒... (請將資料夾拖入上方，或點擊按鈕開始轉換)</div>
 </div>
 
 <script>
-    function toggleMode() {
-        const mode = document.querySelector('input[name="uploadMode"]:checked').value;
-        const fileInput = document.getElementById('fileInput');
-        const folderInput = document.getElementById('folderInput');
-        const statusDiv = document.getElementById('status');
-        
-        statusDiv.style.display = 'none';
-        if (mode === 'file') {
-            fileInput.style.display = 'block';
-            folderInput.style.display = 'none';
-            folderInput.value = '';
-        } else {
-            fileInput.style.display = 'none';
-            folderInput.style.display = 'block';
-            fileInput.value = '';
-        }
-    }
+    const logEl = document.getElementById('log');
+    function log(m) { logEl.innerText += '\n' + m; logEl.scrollTop = logEl.scrollHeight; }
 
-    function toggleSections() {
-        const enableOpenCC = document.getElementById('enableOpenCC').checked;
-        const enableCustomRules = document.getElementById('enableCustomRules').checked;
-        
-        document.getElementById('openccSection').style.display = enableOpenCC ? 'block' : 'none';
-        document.getElementById('customRulesSection').style.display = enableCustomRules ? 'block' : 'none';
-    }
+    const urlPattern = /([a-zA-Z0-9_:-]*(?:href|src))\s*=\s*(['"])(.*?)\2/gi;
+    const xmlEncPattern = /(<\?xml[^>]+encoding\s*=\s*['"])[a-zA-Z0-9\-]+(['"])/gi;
+    const metaEncPattern = /(<meta[^>]+charset\s*=\s*['"]?)[a-zA-Z0-9\-]+(['"]?)/gi;
 
-    function addRuleRow() {
-        const container = document.getElementById('rulesContainer');
-        const row = document.createElement('div');
-        row.className = 'rule-row';
-        row.innerHTML = `
-            <input type="text" class="find-input" placeholder="要被換掉的字詞">
-            <span>➔</span>
-            <input type="text" class="replace-input" placeholder="換成新的字詞">
-            <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
-        `;
-        container.appendChild(row);
-    }
+    // 核心 EPUB 轉換邏輯
+    async function processSingleEpub(file, converter) {
+        const zip = await new JSZip().loadAsync(file);
+        const newZip = new JSZip();
 
-    function deleteRow(button) {
-        const row = button.parentElement;
-        const container = document.getElementById('rulesContainer');
-        if (container.children.length > 1) {
-            row.remove();
-        } else {
-            row.querySelector('.find-input').value = '';
-            row.querySelector('.replace-input').value = '';
-        }
-    }
-
-    function showStatus(text, type) {
-        const statusDiv = document.getElementById('status');
-        statusDiv.style.display = 'block';
-        statusDiv.className = type;
-        statusDiv.innerText = text;
-    }
-
-    function getRules() {
-        const rows = document.querySelectorAll('.rule-row');
-        const rules = [];
-        rows.forEach(row => {
-            const findVal = row.querySelector('.find-input').value;
-            const replaceVal = row.querySelector('.replace-input').value;
-            if (findVal) rules.push({ find: findVal, replace: replaceVal });
-        });
-        return rules;
-    }
-
-    function replaceContent(text, rules, converter) {
-        let modifiedText = text;
-        
-        // 先做 OpenCC 轉換
-        if (converter) {
-            modifiedText = converter(modifiedText);
+        if (zip.files['mimetype']) {
+            const mimeContent = await zip.file('mimetype').async('string');
+            newZip.file('mimetype', mimeContent);
         }
 
-        // 再做自訂規則替換
-        for (const rule of rules) {
-            modifiedText = modifiedText.split(rule.find).join(rule.replace);
-        }
-        return modifiedText;
-    }
+        for (const [path, entry] of Object.entries(zip.files)) {
+            if (entry.dir || path === 'mimetype') continue;
 
-    function isTextExtension(filename) {
-        const ext = filename.split('.').pop().toLowerCase();
-        return ['html', 'xhtml', 'htm', 'txt', 'opf', 'ncx'].includes(ext);
-    }
+            const isTextFile = path.match(/\.(html|xhtml|htm|ncx|opf|xml|txt|css)$/i);
+            // 轉換檔名
+            const newPath = converter(path);
 
-    const readFileAsText = (file) => new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => res(e.target.result);
-        r.onerror = () => rej(new Error(`讀取文字失敗: ${file.name}`));
-        r.readAsText(file);
-    });
+            if (isTextFile) {
+                let content = await entry.async("string");
 
-    const readFileAsArrayBuffer = (file) => new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => res(e.target.result);
-        r.onerror = () => rej(new Error(`讀取二進位失敗: ${file.name}`));
-        r.readAsArrayBuffer(file);
-    });
+                content = content.replace(urlPattern, (match, attr, quote, urlVal) => {
+                    try { return `${attr}=${quote}${decodeURIComponent(urlVal)}${quote}`; } 
+                    catch (err) { return match; }
+                });
 
-    // 核心控制排程（維持原邏輯）
-    async function processAll() {
-        const mode = document.querySelector('input[name="uploadMode"]:checked').value;
-        const submitBtn = document.getElementById('submitBtn');
-        const enableOpenCC = document.getElementById('enableOpenCC').checked;
-        const enableCustomRules = document.getElementById('enableCustomRules').checked;
-        const rules = enableCustomRules ? getRules() : [];
+                // 轉換內容
+                content = converter(content);
 
-        if (!enableOpenCC && !enableCustomRules) {
-            alert('請至少勾選一項功能！');
-            return;
-        }
+                content = content.replace(xmlEncPattern, "$1utf-8$2");
+                content = content.replace(metaEncPattern, "$1utf-8$2");
 
-        if (enableCustomRules && rules.length === 0) {
-            alert('請至少填寫一組有效的替換規則！');
-            return;
-        }
-
-        submitBtn.disabled = true;
-
-        // 初始化 OpenCC 轉換器
-        let converter = null;
-        if (enableOpenCC) {
-            const openccMode = document.getElementById('openccMode').value;
-            const [fromLang, toLang] = openccMode.split('2');
-            try {
-                converter = OpenCC.Converter({ from: fromLang, to: toLang });
-            } catch (err) {
-                console.error("OpenCC 初始化失敗:", err);
-                alert("語系轉換器載入失敗！");
-                submitBtn.disabled = false;
-                return;
-            }
-        }
-
-        try {
-            if (mode === 'file') {
-                const fileInput = document.getElementById('fileInput');
-                if (!fileInput.files.length) return alert('請選取一個檔案！');
-                
-                showStatus('單檔案處理中...', 'info');
-                const file = fileInput.files[0];
-                const ext = file.name.split('.').pop().toLowerCase();
-                
-                // ★ 這裡處理輸出檔名的簡轉繁
-                let finalFileName = 'replaced_' + file.name;
-                if (converter) finalFileName = converter(finalFileName);
-                
-                if (ext === 'txt') {
-                    const text = await readFileAsText(file);
-                    const newText = replaceContent(text, rules, converter);
-                    triggerDownload(new Blob([newText], {type: 'text/plain;charset=utf-8'}), finalFileName);
-                } else if (ext === 'epub') {
-                    const epubBlob = await processEpubFile(file, rules, converter);
-                    triggerDownload(epubBlob, finalFileName);
-                } else {
-                    throw new Error('不支援的副檔名！');
-                }
-                showStatus('處理成功！已下載新檔案。', 'success');
-
+                newZip.file(newPath, content);
             } else {
-                const folderInput = document.getElementById('folderInput');
-                const files = folderInput.files;
-                if (!files.length) return alert('請選取一個資料夾！');
+                newZip.file(newPath, await entry.async("blob"));
+            }
+        }
+        return await newZip.generateAsync({ type: "blob", mimeType: "application/epub+zip" });
+    }
 
-                showStatus(`正在解析資料夾...\n共發現 ${files.length} 個檔案`, 'info');
-                
-                const outputZip = new JSZip();
-                let processedCount = 0;
+    function checkOpenCC() {
+        if (typeof OpenCC === 'undefined') {
+            log("❌ 錯誤：OpenCC 尚未載入，請稍後再試或檢查網路連線。");
+            return null;
+        }
+        return OpenCC.Converter({ from: 'cn', to: 'twp' });
+    }
 
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const relativePath = file.webkitRelativePath; 
-                    const ext = file.name.split('.').pop().toLowerCase();
+    async function handleExecution(itemsArray, isFolderMode, defaultPackageName) {
+        const converter = checkOpenCC();
+        if (!converter) return;
 
-                    // ★ 這裡處理壓縮包內資料夾與檔名的簡轉繁
-                    let finalRelativePath = relativePath;
-                    if (converter) finalRelativePath = converter(relativePath);
+        if (itemsArray.length === 0) {
+            log("❌ 未偵測到任何有效的 .epub 檔案。");
+            return;
+        }
 
-                    showStatus(`正在處理 (${i+1}/${files.length}):\n${file.name}`, 'info');
+        log("==================================================");
+        if (isFolderMode) {
+            // 轉換根目錄名稱
+            const translatedRootName = converter(defaultPackageName) + "_TW";
+            log(`📂 偵測到資料夾結構，共有 ${itemsArray.length} 本 EPUB 檔案。`);
+            log(`📦 系統將自動打包並維持原完整目錄結構至：${translatedRootName}.zip`);
 
-                    if (ext === 'txt') {
-                        const text = await readFileAsText(file);
-                        const newText = replaceContent(text, rules, converter);
-                        outputZip.file(finalRelativePath, newText);
-                        processedCount++;
-                    } else if (ext === 'epub') {
-                        const epubBlob = await processEpubFile(file, rules, converter);
-                        outputZip.file(finalRelativePath, epubBlob);
-                        processedCount++;
-                    } else {
-                        outputZip.file(finalRelativePath, file);
+            const masterZip = new JSZip();
+            for (const item of itemsArray) {
+                log(`🚀 深度處理中: ${item.relPath}`);
+                try {
+                    const convertedBlob = await processSingleEpub(item.file, converter);
+                    const pathParts = item.relPath.split('/');
+                    pathParts[0] = translatedRootName;
+                    for (let i = 1; i < pathParts.length; i++) {
+                        pathParts[i] = converter(pathParts[i]);
                     }
+                    const translatedRelPath = pathParts.join('/');
+                    masterZip.file(translatedRelPath, convertedBlob);
+                    log(`✅ 已排入: ${translatedRelPath}`);
+                } catch (err) { log(`❌ 轉換失敗: ${item.relPath} (${err.message})`); }
+            }
+
+            const masterBlob = await masterZip.generateAsync({ type: "blob" });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(masterBlob);
+            a.download = `${translatedRootName}.zip`;
+            a.click();
+            log(`🎉 【全部轉換完成】下載檔名：${translatedRootName}.zip`);
+        } else {
+            for (const item of itemsArray) {
+                log(`🚀 正在處理: ${item.file.name}`);
+                try {
+                    const convertedBlob = await processSingleEpub(item.file, converter);
+                    const translatedFileName = converter(item.file.name);
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(convertedBlob);
+                    a.download = translatedFileName;
+                    a.click();
+                    log(`🎉 轉換完成！下載: ${translatedFileName}`);
+                } catch (err) { log(`❌ 轉換失敗: ${item.file.name} (${err.message})`); }
+            }
+        }
+    }
+
+    // 拖曳處理...
+    const dropZone = document.getElementById('dropZone');
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+    dropZone.ondragleave = () => { dropZone.classList.remove('dragover'); };
+    dropZone.ondrop = async (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const items = e.dataTransfer.items;
+        const itemsArray = [];
+        let hasFolder = false;
+        let rootName = "EPUB_Folder";
+
+        async function traverseEntry(entry, currentPath) {
+            if (entry.isFile) {
+                if (entry.name.toLowerCase().endsWith('.epub')) {
+                    const file = await new Promise((res, rej) => entry.file(res, rej));
+                    itemsArray.push({ file: file, relPath: currentPath + entry.name });
                 }
-
-                showStatus('正在打包壓縮新資料夾，請稍候...', 'info');
-                const finalZipBlob = await outputZip.generateAsync({ type: 'blob' });
-                
-                const rootFolderName = files[0].webkitRelativePath.split('/')[0];
-                
-                // ★ 這裡處理最終打包 ZIP 檔名的簡轉繁
-                let finalZipName = `replaced_${rootFolderName}.zip`;
-                if (converter) finalZipName = converter(finalZipName);
-
-                triggerDownload(finalZipBlob, finalZipName);
-                showStatus(`處理完畢！\n共修改了 ${processedCount} 個符合格式的檔案。\n已自動下載打包後的 ZIP 壓縮檔。`, 'success');
-            }
-        } catch (error) {
-            console.error(error);
-            showStatus('發生錯誤：' + error.message, 'error');
-        } finally {
-            submitBtn.disabled = false;
-        }
-    }
-
-    async function processEpubFile(file, rules, converter) {
-        const arrayBuffer = await readFileAsArrayBuffer(file);
-        const epubZip = new JSZip();
-        const loadedEpub = await epubZip.loadAsync(arrayBuffer);
-        
-        for (const filename of Object.keys(loadedEpub.files)) {
-            const zipEntry = loadedEpub.files[filename];
-            
-            // 注意：EPUB 內部的檔名不能隨意轉換，否則 OPF 會抓不到檔案導致壞軌，所以只轉換內文
-            if (!zipEntry.dir && isTextExtension(filename)) {
-                let content = await zipEntry.async('text');
-                content = replaceContent(content, rules, converter);
-                epubZip.file(filename, content);
+            } else if (entry.isDirectory) {
+                hasFolder = true;
+                const reader = entry.createReader();
+                const entries = await new Promise((res) => {
+                    let all = [];
+                    function read() { reader.readEntries((r) => { if(r.length===0) res(all); else { all=all.concat(r); read(); } }); }
+                    read();
+                });
+                for (const child of entries) await traverseEntry(child, currentPath + entry.name + "/");
             }
         }
-        return await epubZip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
-    }
 
-    function triggerDownload(blob, filename) {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-    }
+        for (let i = 0; i < items.length; i++) {
+            const entry = items[i].webkitGetAsEntry();
+            if (entry) {
+                if (entry.isDirectory && i === 0) rootName = entry.name;
+                await traverseEntry(entry, "");
+            }
+        }
+        await handleExecution(itemsArray, hasFolder, rootName);
+    };
+
+    document.getElementById('fileInput').onchange = async (e) => {
+        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.epub'));
+        const itemsArray = files.map(f => ({ file: f, relPath: f.name }));
+        await handleExecution(itemsArray, false, "");
+        e.target.value = "";
+    };
+
+    document.getElementById('folderInput').onchange = async (e) => {
+        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.epub'));
+        if (files.length === 0) return;
+        let rootName = files[0].webkitRelativePath ? files[0].webkitRelativePath.split('/')[0] : "EPUB_Folder";
+        const itemsArray = files.map(f => ({ file: f, relPath: f.webkitRelativePath || f.name }));
+        await handleExecution(itemsArray, true, rootName);
+        e.target.value = "";
+    };
 </script>
-
 </body>
 </html>
