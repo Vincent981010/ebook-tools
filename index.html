@@ -126,7 +126,6 @@
         .info { background-color: #e3f2fd; color: #0d47a1; }
         .success { background-color: #e8f5e9; color: #1b5e20; }
         .error { background-color: #ffebee; color: #c62828; }
-        /* 新增的 OpenCC 樣式 */
         .opencc-container {
             background: #f8f9fa;
             padding: 15px;
@@ -159,4 +158,263 @@
             </label>
         </div>
         
-        <input type="file" id="fileInput" accept=".txt,.
+        <input type="file" id="fileInput" accept=".txt,.epub">
+        <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+    </div>
+
+    <div class="form-group opencc-container">
+        <label>
+            <input type="checkbox" id="enableOpenCC" checked> 啟用 OpenCC 繁簡轉換
+        </label>
+        <select id="openccMode">
+            <option value="cn2twp">簡體 ➔ 臺灣正體（含常用詞彙修正，推薦）</option>
+            <option value="cn2tw">簡體 ➔ 臺灣正體（僅轉字）</option>
+            <option value="cn2t">簡體 ➔ 傳統繁體</option>
+            <option value="tw2cn">臺灣正體 ➔ 簡體（含常用詞彙修正）</option>
+            <option value="t2cn">繁體 ➔ 簡體</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>2. 設定替換規則（可設定多組）</label>
+        <div id="rulesContainer">
+            <div class="rule-row">
+                <input type="text" class="find-input" placeholder="要被換掉的字詞（例如：舊主角名）">
+                <span>➔</span>
+                <input type="text" class="replace-input" placeholder="換成新的字詞（例如：新主角名）">
+                <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
+            </div>
+        </div>
+        <button type="button" class="btn-add" onclick="addRuleRow()">+ 增加一組規則</button>
+    </div>
+
+    <button type="button" id="submitBtn" class="btn-submit" onclick="processAll()">執行處理並下載</button>
+    
+    <div id="status"></div>
+</div>
+
+<script>
+    function toggleMode() {
+        const mode = document.querySelector('input[name="uploadMode"]:checked').value;
+        const fileInput = document.getElementById('fileInput');
+        const folderInput = document.getElementById('folderInput');
+        const statusDiv = document.getElementById('status');
+        
+        statusDiv.style.display = 'none';
+        if (mode === 'file') {
+            fileInput.style.display = 'block';
+            folderInput.style.display = 'none';
+            folderInput.value = '';
+        } else {
+            fileInput.style.display = 'none';
+            folderInput.style.display = 'block';
+            fileInput.value = '';
+        }
+    }
+
+    function addRuleRow() {
+        const container = document.getElementById('rulesContainer');
+        const row = document.createElement('div');
+        row.className = 'rule-row';
+        row.innerHTML = `
+            <input type="text" class="find-input" placeholder="要被換掉的字詞">
+            <span>➔</span>
+            <input type="text" class="replace-input" placeholder="換成新的字詞">
+            <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function deleteRow(button) {
+        const row = button.parentElement;
+        const container = document.getElementById('rulesContainer');
+        if (container.children.length > 1) {
+            row.remove();
+        } else {
+            row.querySelector('.find-input').value = '';
+            row.querySelector('.replace-input').value = '';
+        }
+    }
+
+    function showStatus(text, type) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.style.display = 'block';
+        statusDiv.className = type;
+        statusDiv.innerText = text;
+    }
+
+    function getRules() {
+        const rows = document.querySelectorAll('.rule-row');
+        const rules = [];
+        rows.forEach(row => {
+            const findVal = row.querySelector('.find-input').value;
+            const replaceVal = row.querySelector('.replace-input').value;
+            if (findVal) rules.push({ find: findVal, replace: replaceVal });
+        });
+        return rules;
+    }
+
+    function replaceContent(text, rules, converter) {
+        let modifiedText = text;
+        
+        if (converter) {
+            modifiedText = converter(modifiedText);
+        }
+
+        for (const rule of rules) {
+            modifiedText = modifiedText.split(rule.find).join(rule.replace);
+        }
+        return modifiedText;
+    }
+
+    function isTextExtension(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        return ['html', 'xhtml', 'htm', 'txt', 'opf', 'ncx'].includes(ext);
+    }
+
+    const readFileAsText = (file) => new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.onerror = () => rej(new Error(`讀取文字失敗: ${file.name}`));
+        r.readAsText(file);
+    });
+
+    const readFileAsArrayBuffer = (file) => new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.onerror = () => rej(new Error(`讀取二進位失敗: ${file.name}`));
+        r.readAsArrayBuffer(file);
+    });
+
+    async function processAll() {
+        const mode = document.querySelector('input[name="uploadMode"]:checked').value;
+        const rules = getRules();
+        const submitBtn = document.getElementById('submitBtn');
+        const enableOpenCC = document.getElementById('enableOpenCC').checked;
+
+        if (rules.length === 0 && !enableOpenCC) {
+            alert('請至少啟用繁簡轉換或填寫一組替換規則！');
+            return;
+        }
+
+        submitBtn.disabled = true;
+
+        let converter = null;
+        if (enableOpenCC) {
+            const openccMode = document.getElementById('openccMode').value;
+            const [fromLang, toLang] = openccMode.split('2');
+            try {
+                converter = OpenCC.Converter({ from: fromLang, to: toLang });
+            } catch (err) {
+                console.error("OpenCC 初始化失敗:", err);
+                alert("語系轉換器載入失敗！");
+                submitBtn.disabled = false;
+                return;
+            }
+        }
+
+        try {
+            if (mode === 'file') {
+                const fileInput = document.getElementById('fileInput');
+                if (!fileInput.files.length) return alert('請選取一個檔案！');
+                
+                showStatus('單檔案處理中...', 'info');
+                const file = fileInput.files[0];
+                const ext = file.name.split('.').pop().toLowerCase();
+                
+                // 修正：對輸出的單檔名稱進行繁簡轉換
+                const outFileName = converter ? converter(file.name) : file.name;
+                
+                if (ext === 'txt') {
+                    const text = await readFileAsText(file);
+                    const newText = replaceContent(text, rules, converter);
+                    triggerDownload(new Blob([newText], {type: 'text/plain;charset=utf-8'}), 'replaced_' + outFileName);
+                } else if (ext === 'epub') {
+                    const epubBlob = await processEpubFile(file, rules, converter);
+                    triggerDownload(epubBlob, 'replaced_' + outFileName);
+                } else {
+                    throw new Error('不支援的副檔名！');
+                }
+                showStatus('處理成功！已下載新檔案。', 'success');
+
+            } else {
+                const folderInput = document.getElementById('folderInput');
+                const files = folderInput.files;
+                if (!files.length) return alert('請選取一個資料夾！');
+
+                showStatus(`正在解析資料夾...\n共發現 ${files.length} 個檔案`, 'info');
+                
+                const outputZip = new JSZip();
+                let processedCount = 0;
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const relativePath = file.webkitRelativePath; 
+                    const ext = file.name.split('.').pop().toLowerCase();
+
+                    // 修正：對壓縮包內部的相對路徑與資料夾/檔案名稱進行繁簡轉換
+                    const outRelativePath = converter ? converter(relativePath) : relativePath;
+
+                    showStatus(`正在處理 (${i+1}/${files.length}):\n${file.name}`, 'info');
+
+                    if (ext === 'txt') {
+                        const text = await readFileAsText(file);
+                        const newText = replaceContent(text, rules, converter);
+                        outputZip.file(outRelativePath, newText);
+                        processedCount++;
+                    } else if (ext === 'epub') {
+                        const epubBlob = await processEpubFile(file, rules, converter);
+                        outputZip.file(outRelativePath, epubBlob);
+                        processedCount++;
+                    } else {
+                        outputZip.file(outRelativePath, file);
+                    }
+                }
+
+                showStatus('正在打包壓縮新資料夾，請稍候...', 'info');
+                const finalZipBlob = await outputZip.generateAsync({ type: 'blob' });
+                
+                const rootFolderName = files[0].webkitRelativePath.split('/')[0];
+                // 修正：對最終下載的 ZIP 壓縮包名稱進行繁簡轉換
+                const outRootFolderName = converter ? converter(rootFolderName) : rootFolderName;
+                
+                triggerDownload(finalZipBlob, `replaced_${outRootFolderName}.zip`);
+                showStatus(`處理完畢！\n共修改了 ${processedCount} 個符合格式的檔案。\n已自動下載打包後的 ZIP 壓縮檔。`, 'success');
+            }
+        } catch (error) {
+            console.error(error);
+            showStatus('發生錯誤：' + error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+    async function processEpubFile(file, rules, converter) {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const epubZip = new JSZip();
+        const loadedEpub = await epubZip.loadAsync(arrayBuffer);
+        
+        for (const filename of Object.keys(loadedEpub.files)) {
+            const zipEntry = loadedEpub.files[filename];
+            if (!zipEntry.dir && isTextExtension(filename)) {
+                let content = await zipEntry.async('text');
+                content = replaceContent(content, rules, converter);
+                epubZip.file(filename, content);
+            }
+        }
+        return await epubZip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
+    }
+
+    function triggerDownload(blob, filename) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    }
+</script>
+
+</body>
+</html>
