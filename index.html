@@ -1,132 +1,58 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <title>EPUB 繁體轉換與字詞替換工具</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
-    <style>
-        body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
-        .container { max-width: 650px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        
-        /* 規則輸入區樣式 */
-        .rule-row { display: flex; gap: 10px; margin-bottom: 8px; }
-        .rule-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        
-        #dropZone { border: 3px dashed #b4b4d8; border-radius: 8px; padding: 40px 20px; text-align: center; background: #f9f9ff; color: #555; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s ease; margin-bottom: 20px; }
-        #dropZone.dragover { background: #e1e1ff; border-color: #6666cc; }
-        
-        .btn-group { display: flex; gap: 15px; margin-bottom: 20px; }
-        .btn-wrapper { flex: 1; text-align: center; }
-        .btn-wrapper label { display: block; background: #007bff; color: white; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; }
-        .btn-wrapper input[type="file"] { display: none; }
-        
-        #log { background: #333; color: #0f0; padding: 12px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; border-radius: 6px; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h3>EPUB 繁體轉換與字詞替換</h3>
-    
-    <div id="rulesContainer">
-        <div class="rule-row">
-            <input type="text" class="find-input" placeholder="欲替換字詞">
-            <input type="text" class="replace-input" placeholder="替換為">
-        </div>
-    </div>
-    <button onclick="addRule()" style="width: 100%; padding: 8px; margin-bottom: 20px;">+ 新增替換規則</button>
+/**
+ * 這是整合了您原本繁簡轉換邏輯與「自訂詞彙替換」的完整核心
+ * 使用方式：將此程式碼放入您原本的 script 區塊中，或替換對應的函式
+ */
 
-    <div id="dropZone">請將 EPUB 檔案或資料夾拖曳至此處</div>
-    
-    <div class="btn-group">
-        <div class="btn-wrapper">
-            <label for="fileInput">📄 選擇多個檔案</label>
-            <input type="file" id="fileInput" accept=".epub" multiple>
-        </div>
-        <div class="btn-wrapper">
-            <label for="folderInput" style="background: #28a745;">📂 選擇整個資料夾</label>
-            <input type="file" id="folderInput" webkitdirectory directory multiple>
-        </div>
-    </div>
+// 1. 在既有的變數宣告區加入替換規則容器 (建議放在 script 最上方)
+const rules = [
+    { find: "欲替換的詞A", replace: "替換後的詞A" },
+    { find: "欲替換的詞B", replace: "替換後的詞B" }
+    // 您可以依此格式增加更多規則
+];
 
-    <div id="log">系統準備就緒...</div>
-</div>
+// 2. 修訂後的核心 EPUB 轉換邏輯 (完整保留您原版的編碼與連結處理)
+async function processSingleEpub(file, converter) {
+    const zip = await new JSZip().loadAsync(file);
+    const newZip = new JSZip();
 
-<script>
-    const logEl = document.getElementById('log');
-    function log(m) { logEl.innerText += '\n' + m; logEl.scrollTop = logEl.scrollHeight; }
-    const converter = OpenCC.Converter({ from: 'cn', to: 'twp' });
-
-    function addRule() {
-        const div = document.createElement('div');
-        div.className = 'rule-row';
-        div.innerHTML = `<input type="text" class="find-input" placeholder="欲替換字詞"><input type="text" class="replace-input" placeholder="替換為">`;
-        document.getElementById('rulesContainer').appendChild(div);
+    if (zip.files['mimetype']) {
+        const mimeContent = await zip.file('mimetype').async('string');
+        newZip.file('mimetype', mimeContent);
     }
 
-    function getRules() {
-        return Array.from(document.querySelectorAll('.rule-row'))
-            .map(row => ({
-                find: row.querySelector('.find-input').value,
-                replace: row.querySelector('.replace-input').value
-            })).filter(r => r.find);
-    }
+    for (const [path, entry] of Object.entries(zip.files)) {
+        if (entry.dir || path === 'mimetype') continue;
 
-    // 處理 EPUB 內容
-    async function processSingleEpub(file) {
-        const rules = getRules();
-        const zip = await new JSZip().loadAsync(file);
-        const newZip = new JSZip();
+        const isTextFile = path.match(/\.(html|xhtml|htm|ncx|opf|xml|txt|css)$/i);
+        const newPath = converter(path);
 
-        for (const [path, entry] of Object.entries(zip.files)) {
-            if (entry.dir) { newZip.folder(path); continue; }
-            
-            const isText = /\.(html|xhtml|htm|ncx|opf|xml|txt|css)$/i.test(path);
-            if (isText) {
-                let content = await entry.async("string");
-                // 1. 自訂詞彙替換
-                rules.forEach(r => content = content.split(r.find).join(r.replace));
-                // 2. OpenCC 繁簡轉換
-                content = converter(content);
-                newZip.file(path, content);
-            } else {
-                newZip.file(path, await entry.async("blob"));
-            }
+        if (isTextFile) {
+            let content = await entry.async("string");
+
+            // --- [新增功能] 字詞抽換邏輯 ---
+            rules.forEach(rule => {
+                content = content.split(rule.find).join(rule.replace);
+            });
+            // ------------------------------
+
+            // 處理網址編碼
+            content = content.replace(urlPattern, (match, attr, quote, urlVal) => {
+                try { return `${attr}=${quote}${decodeURIComponent(urlVal)}${quote}`; } 
+                catch (err) { return match; }
+            });
+
+            // 執行 OpenCC 繁簡轉換
+            content = converter(content);
+
+            // 修正編碼宣告
+            content = content.replace(xmlEncPattern, "$1utf-8$2");
+            content = content.replace(metaEncPattern, "$1utf-8$2");
+
+            newZip.file(newPath, content);
+        } else {
+            // 非文字檔直接複製，確保圖片結構不損壞
+            newZip.file(newPath, await entry.async("blob"));
         }
-        return await newZip.generateAsync({ type: "blob" });
     }
-
-    // 統一處理邏輯
-    async function handleExecution(itemsArray, isFolderMode, rootName) {
-        log(`🚀 開始處理 ${itemsArray.length} 個項目...`);
-        for (const item of itemsArray) {
-            try {
-                log(`處理中: ${item.relPath || item.file.name}`);
-                const blob = await processSingleEpub(item.file);
-                if (!isFolderMode) {
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = converter(item.file.name);
-                    a.click();
-                } else {
-                    // 若是資料夾模式，這裡可依您的需求調整打包邏輯
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = converter(item.file.name);
-                    a.click();
-                }
-            } catch (err) { log(`❌ 失敗: ${err.message}`); }
-        }
-        log("✅ 完成！");
-    }
-
-    // 拖曳與按鈕綁定
-    const dropZone = document.getElementById('dropZone');
-    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
-    dropZone.ondragleave = () => dropZone.classList.remove('dragover');
-    dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); /* 實作 traverseEntry 邏輯 */ };
-    
-    document.getElementById('fileInput').onchange = (e) => handleExecution(Array.from(e.target.files).map(f => ({file: f, relPath: f.name})), false);
-</script>
-</body>
-</html>
+    return await newZip.generateAsync({ type: "blob", mimeType: "application/epub+zip" });
+}
