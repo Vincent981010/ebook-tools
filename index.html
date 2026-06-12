@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPUB / TXT 字詞大量替換與繁簡轉換工具</title>
+    <title>EPUB / TXT 字詞替換與轉換工具</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
     <style>
@@ -36,7 +36,12 @@
             margin-bottom: 25px;
         }
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed #e0e0e0;
+        }
+        .form-group:last-of-type {
+            border-bottom: none;
         }
         label {
             display: block;
@@ -63,6 +68,30 @@
             cursor: pointer;
             box-sizing: border-box;
             background: #fafafa;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-weight: bold;
+        }
+        .sub-settings {
+            margin-left: 24px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid var(--primary-color);
+            border-radius: 0 6px 6px 0;
+        }
+        select {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+            background: white;
         }
         .rule-row {
             display: flex;
@@ -105,7 +134,7 @@
             width: 100%;
             font-size: 16px;
             padding: 12px;
-            margin-top: 25px;
+            margin-top: 15px;
             border-radius: 6px;
         }
         .btn-submit:hover { background-color: #357abd; }
@@ -126,20 +155,6 @@
         .info { background-color: #e3f2fd; color: #0d47a1; }
         .success { background-color: #e8f5e9; color: #1b5e20; }
         .error { background-color: #ffebee; color: #c62828; }
-        .opencc-container {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            border-left: 4px solid var(--primary-color);
-        }
-        .opencc-container select {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
     </style>
 </head>
 <body>
@@ -162,30 +177,38 @@
         <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
     </div>
 
-    <div class="form-group opencc-container">
-        <label>
-            <input type="checkbox" id="enableOpenCC" checked> 啟用 OpenCC 繁簡轉換
-        </label>
-        <select id="openccMode">
-            <option value="cn2twp">簡體 ➔ 臺灣正體（含常用詞彙修正，推薦）</option>
-            <option value="cn2tw">簡體 ➔ 臺灣正體（僅轉字）</option>
-            <option value="cn2t">簡體 ➔ 傳統繁體</option>
-            <option value="tw2cn">臺灣正體 ➔ 簡體（含常用詞彙修正）</option>
-            <option value="t2cn">繁體 ➔ 簡體</option>
-        </select>
-    </div>
-
     <div class="form-group">
-        <label>2. 設定替換規則（可設定多組）</label>
-        <div id="rulesContainer">
-            <div class="rule-row">
-                <input type="text" class="find-input" placeholder="要被換掉的字詞（例如：舊主角名）">
-                <span>➔</span>
-                <input type="text" class="replace-input" placeholder="換成新的字詞（例如：新主角名）">
-                <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
-            </div>
+        <label>2. 設定電子書處理功能</label>
+        
+        <div class="checkbox-group">
+            <input type="checkbox" id="enableOpenCC" checked onchange="toggleSections()">
+            <label for="enableOpenCC" style="margin: 0; cursor: pointer;">啟用 OpenCC 繁簡轉換</label>
         </div>
-        <button type="button" class="btn-add" onclick="addRuleRow()">+ 增加一組規則</button>
+        <div id="openccSection" class="sub-settings">
+            <select id="openccMode">
+                <option value="cn2twp">簡體 ➔ 臺灣正體（含常用詞彙修正，推薦）</option>
+                <option value="cn2tw">簡體 ➔ 臺灣正體（僅轉字）</option>
+                <option value="cn2t">簡體 ➔ 傳統繁體</option>
+                <option value="tw2cn">臺灣正體 ➔ 簡體（含常用詞彙修正）</option>
+                <option value="t2cn">繁體 ➔ 簡體</option>
+            </select>
+        </div>
+
+        <div class="checkbox-group">
+            <input type="checkbox" id="enableCustomRules" onchange="toggleSections()">
+            <label for="enableCustomRules" style="margin: 0; cursor: pointer;">啟用自訂字詞替換規則</label>
+        </div>
+        <div id="customRulesSection" class="sub-settings" style="display: none;">
+            <div id="rulesContainer">
+                <div class="rule-row">
+                    <input type="text" class="find-input" placeholder="要被換掉的字詞（例如：舊主角名）">
+                    <span>➔</span>
+                    <input type="text" class="replace-input" placeholder="換成新的字詞（例如：新主角名）">
+                    <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
+                </div>
+            </div>
+            <button type="button" class="btn-add" onclick="addRuleRow()">+ 增加一組規則</button>
+        </div>
     </div>
 
     <button type="button" id="submitBtn" class="btn-submit" onclick="processAll()">執行處理並下載</button>
@@ -210,6 +233,14 @@
             folderInput.style.display = 'block';
             fileInput.value = '';
         }
+    }
+
+    function toggleSections() {
+        const enableOpenCC = document.getElementById('enableOpenCC').checked;
+        const enableCustomRules = document.getElementById('enableCustomRules').checked;
+        
+        document.getElementById('openccSection').style.display = enableOpenCC ? 'block' : 'none';
+        document.getElementById('customRulesSection').style.display = enableCustomRules ? 'block' : 'none';
     }
 
     function addRuleRow() {
@@ -257,10 +288,12 @@
     function replaceContent(text, rules, converter) {
         let modifiedText = text;
         
+        // 先做 OpenCC 轉換
         if (converter) {
             modifiedText = converter(modifiedText);
         }
 
+        // 再做自訂規則替換
         for (const rule of rules) {
             modifiedText = modifiedText.split(rule.find).join(rule.replace);
         }
@@ -286,19 +319,27 @@
         r.readAsArrayBuffer(file);
     });
 
+    // 核心控制排程（維持原邏輯）
     async function processAll() {
         const mode = document.querySelector('input[name="uploadMode"]:checked').value;
-        const rules = getRules();
         const submitBtn = document.getElementById('submitBtn');
         const enableOpenCC = document.getElementById('enableOpenCC').checked;
+        const enableCustomRules = document.getElementById('enableCustomRules').checked;
+        const rules = enableCustomRules ? getRules() : [];
 
-        if (rules.length === 0 && !enableOpenCC) {
-            alert('請至少啟用繁簡轉換或填寫一組替換規則！');
+        if (!enableOpenCC && !enableCustomRules) {
+            alert('請至少勾選一項功能！');
+            return;
+        }
+
+        if (enableCustomRules && rules.length === 0) {
+            alert('請至少填寫一組有效的替換規則！');
             return;
         }
 
         submitBtn.disabled = true;
 
+        // 初始化 OpenCC 轉換器
         let converter = null;
         if (enableOpenCC) {
             const openccMode = document.getElementById('openccMode').value;
@@ -322,16 +363,17 @@
                 const file = fileInput.files[0];
                 const ext = file.name.split('.').pop().toLowerCase();
                 
-                // 修正：對輸出的單檔名稱進行繁簡轉換
-                const outFileName = converter ? converter(file.name) : file.name;
+                // ★ 這裡處理輸出檔名的簡轉繁
+                let finalFileName = 'replaced_' + file.name;
+                if (converter) finalFileName = converter(finalFileName);
                 
                 if (ext === 'txt') {
                     const text = await readFileAsText(file);
                     const newText = replaceContent(text, rules, converter);
-                    triggerDownload(new Blob([newText], {type: 'text/plain;charset=utf-8'}), 'replaced_' + outFileName);
+                    triggerDownload(new Blob([newText], {type: 'text/plain;charset=utf-8'}), finalFileName);
                 } else if (ext === 'epub') {
                     const epubBlob = await processEpubFile(file, rules, converter);
-                    triggerDownload(epubBlob, 'replaced_' + outFileName);
+                    triggerDownload(epubBlob, finalFileName);
                 } else {
                     throw new Error('不支援的副檔名！');
                 }
@@ -352,22 +394,23 @@
                     const relativePath = file.webkitRelativePath; 
                     const ext = file.name.split('.').pop().toLowerCase();
 
-                    // 修正：對壓縮包內部的相對路徑與資料夾/檔案名稱進行繁簡轉換
-                    const outRelativePath = converter ? converter(relativePath) : relativePath;
+                    // ★ 這裡處理壓縮包內資料夾與檔名的簡轉繁
+                    let finalRelativePath = relativePath;
+                    if (converter) finalRelativePath = converter(relativePath);
 
                     showStatus(`正在處理 (${i+1}/${files.length}):\n${file.name}`, 'info');
 
                     if (ext === 'txt') {
                         const text = await readFileAsText(file);
                         const newText = replaceContent(text, rules, converter);
-                        outputZip.file(outRelativePath, newText);
+                        outputZip.file(finalRelativePath, newText);
                         processedCount++;
                     } else if (ext === 'epub') {
                         const epubBlob = await processEpubFile(file, rules, converter);
-                        outputZip.file(outRelativePath, epubBlob);
+                        outputZip.file(finalRelativePath, epubBlob);
                         processedCount++;
                     } else {
-                        outputZip.file(outRelativePath, file);
+                        outputZip.file(finalRelativePath, file);
                     }
                 }
 
@@ -375,10 +418,12 @@
                 const finalZipBlob = await outputZip.generateAsync({ type: 'blob' });
                 
                 const rootFolderName = files[0].webkitRelativePath.split('/')[0];
-                // 修正：對最終下載的 ZIP 壓縮包名稱進行繁簡轉換
-                const outRootFolderName = converter ? converter(rootFolderName) : rootFolderName;
                 
-                triggerDownload(finalZipBlob, `replaced_${outRootFolderName}.zip`);
+                // ★ 這裡處理最終打包 ZIP 檔名的簡轉繁
+                let finalZipName = `replaced_${rootFolderName}.zip`;
+                if (converter) finalZipName = converter(finalZipName);
+
+                triggerDownload(finalZipBlob, finalZipName);
                 showStatus(`處理完畢！\n共修改了 ${processedCount} 個符合格式的檔案。\n已自動下載打包後的 ZIP 壓縮檔。`, 'success');
             }
         } catch (error) {
@@ -396,6 +441,8 @@
         
         for (const filename of Object.keys(loadedEpub.files)) {
             const zipEntry = loadedEpub.files[filename];
+            
+            // 注意：EPUB 內部的檔名不能隨意轉換，否則 OPF 會抓不到檔案導致壞軌，所以只轉換內文
             if (!zipEntry.dir && isTextExtension(filename)) {
                 let content = await zipEntry.async('text');
                 content = replaceContent(content, rules, converter);
