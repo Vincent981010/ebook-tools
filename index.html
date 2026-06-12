@@ -8,28 +8,19 @@
     <style>
         body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
         .container { max-width: 650px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        
-        /* 拖曳區 */
         #dropZone { border: 3px dashed #b4b4d8; border-radius: 8px; padding: 40px 20px; text-align: center; background: #f9f9ff; margin-bottom: 20px; cursor: pointer; color: #555; }
-        
-        /* 按鈕群組 */
         .btn-group { display: flex; gap: 15px; margin-bottom: 20px; }
         .btn-wrapper { flex: 1; text-align: center; }
         .btn-wrapper label { display: block; background: #007bff; color: white; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-wrapper input { display: none; }
-        
-        /* 規則輸入區 */
         .rule-row { display: flex; gap: 10px; margin-bottom: 8px; }
         .rule-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        
-        /* Log 視窗 */
         #log { background: #333; color: #0f0; padding: 12px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; border-radius: 6px; margin-top: 20px; }
     </style>
 </head>
 <body>
 <div class="container">
     <h3>EPUB 繁體轉換與字詞替換</h3>
-
     <div id="rulesContainer">
         <div class="rule-row">
             <input type="text" class="find-input" placeholder="要被換掉的字詞">
@@ -37,9 +28,7 @@
         </div>
     </div>
     <button onclick="addRule()" style="width: 100%; padding: 8px; margin-bottom: 20px;">+ 新增替換規則</button>
-    
-    <div id="dropZone">請將 EPUB 檔案或資料夾拖曳至此處</div>
-    
+    <div id="dropZone">將 EPUB 檔案或【整個書庫資料夾】拖曳至此處</div>
     <div class="btn-group">
         <div class="btn-wrapper">
             <label for="fileInput">📄 選擇多個檔案</label>
@@ -50,14 +39,12 @@
             <input type="file" id="folderInput" webkitdirectory directory multiple>
         </div>
     </div>
-
     <div id="log">系統準備就緒...</div>
 </div>
 
 <script>
     const logEl = document.getElementById('log');
     function log(m) { logEl.innerText += '\n' + m; logEl.scrollTop = logEl.scrollHeight; }
-
     const converter = OpenCC.Converter({ from: 'cn', to: 'twp' });
 
     function addRule() {
@@ -67,62 +54,79 @@
         document.getElementById('rulesContainer').appendChild(div);
     }
 
-    function getRules() {
-        const rules = [];
-        document.querySelectorAll('.rule-row').forEach(row => {
-            const find = row.querySelector('.find-input').value;
-            const replace = row.querySelector('.replace-input').value;
-            if (find) rules.push({ find, replace });
-        });
-        return rules;
-    }
+    async function processSingleEpub(file) {
+        const rules = Array.from(document.querySelectorAll('.rule-row')).map(r => ({
+            find: r.querySelector('.find-input').value,
+            replace: r.querySelector('.replace-input').value
+        })).filter(r => r.find);
 
-    async function processEpub(file) {
-        const rules = getRules();
         const zip = await new JSZip().loadAsync(file);
         const newZip = new JSZip();
 
-        // 關鍵：保持原始 path 不變，避免章節連結失效
         for (const [path, entry] of Object.entries(zip.files)) {
-            if (entry.dir) {
-                newZip.folder(path);
-                continue;
-            }
-
+            if (entry.dir) { newZip.folder(path); continue; }
             const isText = /\.(html|xhtml|htm|ncx|opf|xml|txt|css)$/i.test(path);
             if (isText) {
                 let content = await entry.async("string");
                 rules.forEach(r => content = content.split(r.find).join(r.replace));
-                content = converter(content);
-                newZip.file(path, content);
+                newZip.file(path, converter(content));
             } else {
                 newZip.file(path, await entry.async("blob"));
             }
         }
-        return await newZip.generateAsync({ type: "blob", mimeType: "application/epub+zip" });
+        return await newZip.generateAsync({ type: "blob" });
     }
 
-    // 處理邏輯綁定到按鈕與拖曳
-    async function handleFile(file) {
-        log(`正在處理: ${file.name}`);
-        try {
-            const blob = await processEpub(file);
+    async function handleExecution(itemsArray, isFolderMode, rootName) {
+        log(`🚀 開始處理 ${itemsArray.length} 個項目...`);
+        if (isFolderMode) {
+            const masterZip = new JSZip();
+            for (const item of itemsArray) {
+                const blob = await processSingleEpub(item.file);
+                masterZip.file(item.relPath, blob);
+            }
+            const finalBlob = await masterZip.generateAsync({ type: "blob" });
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = converter(file.name); // 檔名轉繁
+            a.href = URL.createObjectURL(finalBlob);
+            a.download = `${converter(rootName)}_TW.zip`;
             a.click();
-            log(`✅ 完成: ${file.name}`);
-        } catch (err) { log(`❌ 失敗: ${file.name} - ${err.message}`); }
+        } else {
+            for (const item of itemsArray) {
+                const blob = await processSingleEpub(item.file);
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = converter(item.file.name);
+                a.click();
+            }
+        }
+        log("✅ 所有任務完成！");
     }
 
-    document.getElementById('fileInput').onchange = (e) => Array.from(e.target.files).forEach(handleFile);
-    document.getElementById('folderInput').onchange = (e) => Array.from(e.target.files).filter(f => f.name.endsWith('.epub')).forEach(handleFile);
-    
+    // 拖曳處理邏輯 (遞迴掃描)
     const dropZone = document.getElementById('dropZone');
     dropZone.ondragover = (e) => e.preventDefault();
-    dropZone.ondrop = (e) => {
+    dropZone.ondrop = async (e) => {
         e.preventDefault();
-        Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.epub')).forEach(handleFile);
+        const items = e.dataTransfer.items;
+        const itemsArray = [];
+        async function traverse(entry, path) {
+            if (entry.isFile && entry.name.endsWith('.epub')) {
+                const file = await new Promise(r => entry.file(r));
+                itemsArray.push({ file, relPath: path + entry.name });
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                const entries = await new Promise(r => reader.readEntries(r));
+                for (const e of entries) await traverse(e, path + entry.name + "/");
+            }
+        }
+        for (let i = 0; i < items.length; i++) await traverse(items[i].webkitGetAsEntry(), "");
+        await handleExecution(itemsArray, true, "EPUB_Collection");
+    };
+
+    document.getElementById('fileInput').onchange = (e) => handleExecution(Array.from(e.target.files).map(f => ({file: f, relPath: f.name})), false);
+    document.getElementById('folderInput').onchange = (e) => {
+        const files = Array.from(e.target.files).filter(f => f.name.endsWith('.epub'));
+        handleExecution(files.map(f => ({file: f, relPath: f.webkitRelativePath})), true, files[0].webkitRelativePath.split('/')[0]);
     };
 </script>
 </body>
