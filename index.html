@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>多功能電子書處理工具 (繁簡轉換 & 字詞大量替換)</title>
+    <title>EPUB / TXT 字詞大量替換與繁簡轉換工具</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
     <style>
@@ -36,12 +36,7 @@
             margin-bottom: 25px;
         }
         .form-group {
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 1px dashed #e0e0e0;
-        }
-        .form-group:last-of-type {
-            border-bottom: none;
+            margin-bottom: 20px;
         }
         label {
             display: block;
@@ -68,30 +63,6 @@
             cursor: pointer;
             box-sizing: border-box;
             background: #fafafa;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            font-weight: bold;
-        }
-        .sub-settings {
-            margin-left: 24px;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-left: 4px solid var(--primary-color);
-            border-radius: 0 6px 6px 0;
-        }
-        select {
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-            width: 100%;
-            box-sizing: border-box;
-            background: white;
         }
         .rule-row {
             display: flex;
@@ -134,7 +105,7 @@
             width: 100%;
             font-size: 16px;
             padding: 12px;
-            margin-top: 15px;
+            margin-top: 25px;
             border-radius: 6px;
         }
         .btn-submit:hover { background-color: #357abd; }
@@ -155,12 +126,27 @@
         .info { background-color: #e3f2fd; color: #0d47a1; }
         .success { background-color: #e8f5e9; color: #1b5e20; }
         .error { background-color: #ffebee; color: #c62828; }
+        /* 新增的 OpenCC 樣式 */
+        .opencc-container {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--primary-color);
+        }
+        .opencc-container select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>多功能電子書處理工具</h2>
+    <h2>EPUB / TXT 字詞替換與轉換工具</h2>
     
     <div class="form-group">
         <label>1. 選擇處理模式與檔案</label>
@@ -173,295 +159,4 @@
             </label>
         </div>
         
-        <input type="file" id="fileInput" accept=".txt,.epub">
-        <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
-    </div>
-
-    <div class="form-group">
-        <label>2. 設定電子書處理功能</label>
-        
-        <div class="checkbox-group">
-            <input type="checkbox" id="enableOpenCC" checked onchange="toggleSections()">
-            <label for="enableOpenCC" style="margin: 0; cursor: pointer;">啟用 OpenCC 繁簡 / 習慣詞彙轉換</label>
-        </div>
-        <div id="openccSection" class="sub-settings">
-            <label for="openccMode" style="font-size: 14px; font-weight: normal; margin-bottom: 5px;">轉換模式設定：</label>
-            <select id="openccMode">
-                <option value="cn2twp">簡體 ➔ 臺灣正體（含常用詞彙修正，推薦）</option>
-                <option value="cn2tw">簡體 ➔ 臺灣正體（僅轉字，不改詞彙）</option>
-                <option value="cn2t">簡體 ➔ 傳統繁體</option>
-                <option value="tw2cn">臺灣正體 ➔ 簡體（含常用詞彙修正）</option>
-                <option value="t2cn">繁體 ➔ 簡體</option>
-            </select>
-        </div>
-
-        <div class="checkbox-group">
-            <input type="checkbox" id="enableCustomRules" onchange="toggleSections()">
-            <label for="enableCustomRules" style="margin: 0; cursor: pointer;">啟用自訂字詞大量替換規則</label>
-        </div>
-        <div id="customRulesSection" class="sub-settings" style="display: none;">
-            <div id="rulesContainer">
-                <div class="rule-row">
-                    <input type="text" class="find-input" placeholder="要被換掉的字詞（例如：舊主角名）">
-                    <span>➔</span>
-                    <input type="text" class="replace-input" placeholder="換成新的字詞（例如：新主角名）">
-                    <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
-                </div>
-            </div>
-            <button type="button" class="btn-add" onclick="addRuleRow()">+ 增加一組規則</button>
-        </div>
-    </div>
-
-    <button type="button" id="submitBtn" class="btn-submit" onclick="processAll()">執行處理並下載</button>
-    
-    <div id="status"></div>
-</div>
-
-<script>
-    // 切換單檔案或資料夾上傳介面
-    function toggleMode() {
-        const mode = document.querySelector('input[name="uploadMode"]:checked').value;
-        const fileInput = document.getElementById('fileInput');
-        const folderInput = document.getElementById('folderInput');
-        const statusDiv = document.getElementById('status');
-        
-        statusDiv.style.display = 'none';
-        if (mode === 'file') {
-            fileInput.style.display = 'block';
-            folderInput.style.display = 'none';
-            folderInput.value = '';
-        } else {
-            fileInput.style.display = 'none';
-            folderInput.style.display = 'block';
-            fileInput.value = '';
-        }
-    }
-
-    // 動態展開收合 OpenCC 與 自訂字詞替換的設定面板
-    function toggleSections() {
-        const enableOpenCC = document.getElementById('enableOpenCC').checked;
-        const enableCustomRules = document.getElementById('enableCustomRules').checked;
-        
-        document.getElementById('openccSection').style.display = enableOpenCC ? 'block' : 'none';
-        document.getElementById('customRulesSection').style.display = enableCustomRules ? 'block' : 'none';
-    }
-
-    function addRuleRow() {
-        const container = document.getElementById('rulesContainer');
-        const row = document.createElement('div');
-        row.className = 'rule-row';
-        row.innerHTML = `
-            <input type="text" class="find-input" placeholder="要被換掉的字詞">
-            <span>➔</span>
-            <input type="text" class="replace-input" placeholder="換成新的字詞">
-            <button type="button" class="btn-delete" onclick="deleteRow(this)">刪除</button>
-        `;
-        container.appendChild(row);
-    }
-
-    function deleteRow(button) {
-        const row = button.parentElement;
-        const container = document.getElementById('rulesContainer');
-        if (container.children.length > 1) {
-            row.remove();
-        } else {
-            row.querySelector('.find-input').value = '';
-            row.querySelector('.replace-input').value = '';
-        }
-    }
-
-    function showStatus(text, type) {
-        const statusDiv = document.getElementById('status');
-        statusDiv.style.display = 'block';
-        statusDiv.className = type;
-        statusDiv.innerText = text;
-    }
-
-    function getRules() {
-        const rows = document.querySelectorAll('.rule-row');
-        const rules = [];
-        rows.forEach(row => {
-            const findVal = row.querySelector('.find-input').value;
-            const replaceVal = row.querySelector('.replace-input').value;
-            if (findVal) rules.push({ find: findVal, replace: replaceVal });
-        });
-        return rules;
-    }
-
-    // 整合核心：統一處理文本內容的轉換邏輯
-    function processContent(text, openccConverter, rules) {
-        let modifiedText = text;
-        
-        // Step 1: 先執行 OpenCC 繁簡轉換
-        if (openccConverter) {
-            modifiedText = openccConverter(modifiedText);
-        }
-        
-        // Step 2: 再執行自訂字詞規則替換
-        if (document.getElementById('enableCustomRules').checked && rules.length > 0) {
-            for (const rule of rules) {
-                if (rule.find) {
-                    modifiedText = modifiedText.split(rule.find).join(rule.replace);
-                }
-            }
-        }
-        return modifiedText;
-    }
-
-    function isTextExtension(filename) {
-        const ext = filename.split('.').pop().toLowerCase();
-        return ['html', 'xhtml', 'htm', 'txt', 'opf', 'ncx'].includes(ext);
-    }
-
-    const readFileAsText = (file) => new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => res(e.target.result);
-        r.onerror = () => rej(new Error(`讀取文字失敗: ${file.name}`));
-        r.readAsText(file);
-    });
-
-    const readFileAsArrayBuffer = (file) => new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => res(e.target.result);
-        r.onerror = () => rej(new Error(`讀取二進位失敗: ${file.name}`));
-        r.readAsArrayBuffer(file);
-    });
-
-    // 核心排程控制
-    async function processAll() {
-        const mode = document.querySelector('input[name="uploadMode"]:checked').value;
-        const submitBtn = document.getElementById('submitBtn');
-        
-        const enableOpenCC = document.getElementById('enableOpenCC').checked;
-        const enableCustomRules = document.getElementById('enableCustomRules').checked;
-        const rules = enableCustomRules ? getRules() : [];
-
-        // 驗證是否有勾選功能
-        if (!enableOpenCC && !enableCustomRules) {
-            alert('請至少勾選一項功能（OpenCC 語系轉換 或 自訂字詞替換）！');
-            return;
-        }
-
-        if (enableCustomRules && rules.length === 0) {
-            alert('您已啟用自訂字詞替換，請至少填寫一組有效的替換規則！');
-            return;
-        }
-
-        submitBtn.disabled = true;
-
-        // 初始化 OpenCC 轉換器
-        let openccConverter = null;
-        if (enableOpenCC) {
-            const modeVal = document.getElementById('openccMode').value;
-            const fromLang = modeVal.split('2')[0];
-            const toLang = modeVal.split('2')[1];
-            try {
-                openccConverter = OpenCC.Converter({ from: fromLang, to: toLang });
-            } catch (err) {
-                console.error("OpenCC 初始化失敗:", err);
-                alert("OpenCC 載入發生錯誤，請重新整理網頁後再試。");
-                submitBtn.disabled = false;
-                return;
-            }
-        }
-
-        try {
-            if (mode === 'file') {
-                const fileInput = document.getElementById('fileInput');
-                if (!fileInput.files.length) return alert('請選取一個檔案！');
-                
-                showStatus('檔案處理中...', 'info');
-                const file = fileInput.files[0];
-                const ext = file.name.split('.').pop().toLowerCase();
-                
-                if (ext === 'txt') {
-                    const text = await readFileAsText(file);
-                    const newText = processContent(text, openccConverter, rules);
-                    triggerDownload(new Blob([newText], {type: 'text/plain;charset=utf-8'}), 'processed_' + file.name);
-                } else if (ext === 'epub') {
-                    const epubBlob = await processEpubFile(file, openccConverter, rules);
-                    triggerDownload(epubBlob, 'processed_' + file.name);
-                } else {
-                    throw new Error('不支援的副檔名！格式僅限 .txt 與 .epub');
-                }
-                showStatus('處理成功！已下載新檔案。', 'success');
-
-            } else {
-                // 資料夾批次處理模式
-                const folderInput = document.getElementById('folderInput');
-                const files = folderInput.files;
-                if (!files.length) return alert('請選取一個資料夾！');
-
-                showStatus(`正在解析資料夾...\n共發現 ${files.length} 個檔案`, 'info');
-                
-                const outputZip = new JSZip();
-                let processedCount = 0;
-
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const relativePath = file.webkitRelativePath; 
-                    const ext = file.name.split('.').pop().toLowerCase();
-
-                    showStatus(`正在處理 (${i+1}/${files.length}):\n${file.name}`, 'info');
-
-                    if (ext === 'txt') {
-                        const text = await readFileAsText(file);
-                        const newText = processContent(text, openccConverter, rules);
-                        outputZip.file(relativePath, newText);
-                        processedCount++;
-                    } else if (ext === 'epub') {
-                        const epubBlob = await processEpubFile(file, openccConverter, rules);
-                        outputZip.file(relativePath, epubBlob);
-                        processedCount++;
-                    } else {
-                        // 非 txt/epub 檔案原封不動保留（如圖片、封面、樣式表等），維持原結構完整性
-                        outputZip.file(relativePath, file);
-                    }
-                }
-
-                showStatus('正在打包壓縮新資料夾，請稍候...', 'info');
-                const finalZipBlob = await outputZip.generateAsync({ type: 'blob' });
-                
-                const rootFolderName = files[0].webkitRelativePath.split('/')[0];
-                triggerDownload(finalZipBlob, `processed_${rootFolderName}.zip`);
-                showStatus(`處理完畢！\n共修改了 ${processedCount} 個電子書/文字檔案。\n已自動下載打包後的完整 ZIP 壓縮檔。`, 'success');
-            }
-        } catch (error) {
-            console.error(error);
-            showStatus('發生錯誤：' + error.message, 'error');
-        } finally {
-            submitBtn.disabled = false;
-        }
-    }
-
-    // 解壓、處理並重新打包單一 EPUB
-    async function processEpubFile(file, openccConverter, rules) {
-        const arrayBuffer = await readFileAsArrayBuffer(file);
-        const epubZip = new JSZip();
-        const loadedEpub = await epubZip.loadAsync(arrayBuffer);
-        
-        for (const filename of Object.keys(loadedEpub.files)) {
-            const zipEntry = loadedEpub.files[filename];
-            // 掃描包含內文(html/xhtml)與書籍目錄索引(opf/ncx)的文字型檔案
-            if (!zipEntry.dir && isTextExtension(filename)) {
-                let content = await zipEntry.async('text');
-                content = processContent(content, openccConverter, rules);
-                epubZip.file(filename, content);
-            }
-        }
-        return await epubZip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
-    }
-
-    function triggerDownload(blob, filename) {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-    }
-</script>
-
-</body>
-</html>
+        <input type="file" id="fileInput" accept=".txt,.
